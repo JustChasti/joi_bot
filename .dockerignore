@@ -1,0 +1,43 @@
+# Переменные окружения
+.env
+.env.*
+venv/
+
+# Чувствительные данные
+*.pem
+*.key
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Документация и примеры (не нужны в образе)
+README.md
+*.md
+
+# Тесты (не нужны в production образе)
+tests/
+*_test.go
+
+# Временные файлы
+tmp/
+temp/
+trash/
+
+# Логи
+*.log
+
+# OS файлы
+.DS_Store
+Thumbs.db
+
+# Docker файлы (не нужны внутри образа)
+Dockerfile
+docker-compose.yml
+.dockerignore

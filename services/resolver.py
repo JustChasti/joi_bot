@@ -1,5 +1,3 @@
-import json
-
 from aiogram.types import Message
 from loguru import logger
 
@@ -18,16 +16,11 @@ async def resolve_model_message(message: Message):
 
     api_client = APIClient(url_send_mesage)
     response_data = await api_client.send_message(user_id, text)
-    formatted_response = json.dumps(
-        response_data,
-        indent=2,
-        ensure_ascii=False
-    )
-
-    if len(formatted_response) > 4000:
-        formatted_response = formatted_response[:4000] + "\n...\n(ответ обрезан)"
+    answer = response_data["text"]
+    if len(answer) > 4000:
+        answer = answer[:4000] + "\n...\n(ответ обрезан)"
     await message.answer(
-        f"<pre>{formatted_response}</pre>",
+        answer,
         parse_mode="HTML"
     )
 

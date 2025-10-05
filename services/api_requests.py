@@ -25,10 +25,11 @@ class APIClient:
         self.session = aiohttp.ClientSession()
 
         payload = {
-            "user_id": str(user_id),
+            "user_id": user_id,
             "content": text
         }
-        data = {
+        answer = {
+            "text": "Джой приболела и не может ответить, но совсем скоро пойдет на поправку",
             "details": None
         }
 
@@ -37,20 +38,23 @@ class APIClient:
             async with self.session.post(self.base_url, json=payload) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data
+                    answer = {
+                        "text": data["message"],
+                        "details": None
+                    }
                 else:
                     error_text = await response.text()
-                    logger.error(f"Ошибка сервера {response.status}: {error_text}")
-                    data = {
-                        "error": f"Server returned status {response.status}",
+                    logger.error(f"Server returned status {response.status}: {error_text}")
+                    answer = {
+                        "text": "Джой задремала, но совсем скоро она проснется",
                         "details": error_text
                     }
         except aiohttp.ClientError as e:
             logger.error(f"Ошибка подключения: {e}")
-            data = {
-                "error": "Connection error",
+            answer = {
+                "text": "Джой приболела и не может ответить, но совсем скоро пойдет на поправку",
                 "details": str(e)
             }
         await self.session.close()
         self.session = None
-        return data
+        return answer
