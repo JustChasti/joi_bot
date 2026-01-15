@@ -1,6 +1,7 @@
 from typing import Dict, Any
 import aiohttp
 from loguru import logger
+from config.config import debug_mode
 from services.decorators import handle_errors_async_method
 
 
@@ -34,8 +35,9 @@ class APIClient:
         }
 
         try:
-            logger.info(f"Отправка запроса на {self.base_url}: {payload}")
-            async with self.session.post(self.base_url, json=payload) as response:
+            if debug_mode:
+                logger.info(f"Отправка запроса на {self.base_url}/message: {payload}")
+            async with self.session.post(f"{self.base_url}/message", json=payload) as response:
                 if response.status == 200:
                     data = await response.json()
                     answer = {
@@ -58,3 +60,84 @@ class APIClient:
         await self.session.close()
         self.session = None
         return answer
+
+    @handle_errors_async_method
+    async def get_user_info(self, admin_id: int, user_id: int) -> Dict[str, Any]:
+        """Получить информацию о пользователе"""
+        self.session = aiohttp.ClientSession()
+        payload = {
+            "admin_id": admin_id,
+            "user_id": user_id
+        }
+
+        try:
+            if debug_mode:
+                logger.info(f"Запрос информации о пользователе {user_id}")
+            async with self.session.post(f"{self.base_url}/admin/get-info", json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Ошибка {response.status}: {error_text}")
+                    return {"error": f"Status {response.status}", "details": error_text}
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"error": "Connection error", "details": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
+
+
+    @handle_errors_async_method
+    async def set_user_options(self, admin_id: int, user_id: int, options: Dict[str, Any]) -> Dict[str, Any]:
+        """Изменить настройки пользователя"""
+        self.session = aiohttp.ClientSession()
+        payload = {
+            "admin_id": admin_id,
+            "user_id": user_id,
+            "options": options
+        }
+
+        try:
+            if debug_mode:
+                logger.info(f"Изменение настроек пользователя {user_id}")
+            async with self.session.patch(f"{self.base_url}/admin/set-options", json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Ошибка {response.status}: {error_text}")
+                    return {"error": f"Status {response.status}", "details": error_text}
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"error": "Connection error", "details": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
+
+
+    @handle_errors_async_method
+    async def get_all_users(self, admin_id: int) -> Dict[str, Any]:
+        """Получить список всех пользователей"""
+        self.session = aiohttp.ClientSession()
+        params = {"admin_id": admin_id}
+
+        try:
+            if debug_mode:
+                logger.info("Запрос списка всех пользователей")
+            async with self.session.get(f"{self.base_url}/admin/users", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Ошибка {response.status}: {error_text}")
+                    return {"error": f"Status {response.status}", "details": error_text}
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"error": "Connection error", "details": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
