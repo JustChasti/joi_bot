@@ -20,6 +20,7 @@ def get_back_to_menu_keyboard():
         [InlineKeyboardButton(text="Назад в меню", callback_data="admin_back_to_menu")]
     ])
 
+
 # === Обработка КОМАНД ПОЛЬЗОВАТЕЛЯ === #
 @handle_errors_async
 async def resolve_model_message(message: Message):
@@ -39,6 +40,7 @@ async def resolve_model_message(message: Message):
         parse_mode="HTML"
     )
 
+
 @handle_errors_async
 async def resolve_hello(message: Message):
     """ Читает заготовленный файл и отправляет пользователю"""
@@ -56,13 +58,13 @@ async def resolve_hello(message: Message):
         parse_mode=None
     )
 
+
 # === Обработка АДМИН-ПАНЕЛИ === #
 
-@handle_errors_async
-async def resolve_admin_menu(message: Message, state: FSMContext):
+async def _show_admin_menu(user_id: int, message: Message, state: FSMContext):
     """Показывает главное меню админки"""
     api_client = APIClient(base_url)
-    is_admin = await api_client.check_admin_rights(message.from_user.id)
+    is_admin = await api_client.check_admin_rights(user_id)
     if not is_admin:
         await message.answer(
             "У вас нет прав администратора.\n\n"
@@ -86,11 +88,21 @@ async def resolve_admin_menu(message: Message, state: FSMContext):
         parse_mode="HTML"
     )
 
+
+@handle_errors_async
+async def resolve_admin_menu(message: Message, state: FSMContext):
+    """Показывает админ-панель (вызов через команду /admin)"""
+    user_id = message.from_user.id
+    await _show_admin_menu(user_id, message, state)
+
+
 @handle_errors_async
 async def resolve_admin_back(callback: CallbackQuery, state: FSMContext):
-    """Возврат в меню админки"""
+    """Возврат в меню админки (вызов через кнопку)"""
     await callback.answer()
-    await resolve_admin_menu(callback.message, state)
+    user_id = callback.from_user.id
+    await _show_admin_menu(user_id, callback.message, state)
+
 
 @handle_errors_async
 async def resolve_admin_exit(callback: CallbackQuery, state: FSMContext):
@@ -115,6 +127,7 @@ async def resolve_user_info_request(callback: CallbackQuery, state: FSMContext):
         reply_markup=keyboard,
         parse_mode="HTML"
     )
+
 
 @handle_errors_async
 async def resolve_user_info_process(message: Message, state: FSMContext):
@@ -147,6 +160,7 @@ async def resolve_user_info_process(message: Message, state: FSMContext):
                              reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(StateMachine.admin_main_menu)
 
+
 # === Обработка SET-USER-OPTIONS === #
 
 @handle_errors_async
@@ -160,6 +174,7 @@ async def resolve_options_request(callback: CallbackQuery, state: FSMContext):
         reply_markup=keyboard,
         parse_mode="HTML"
     )
+
 
 @handle_errors_async
 async def resolve_options_user_id(message: Message, state: FSMContext):
@@ -184,6 +199,7 @@ async def resolve_options_user_id(message: Message, state: FSMContext):
         reply_markup=keyboard,
         parse_mode="HTML"
     )
+
 
 @handle_errors_async
 async def resolve_options_data(message: Message, state: FSMContext):
@@ -225,6 +241,7 @@ async def resolve_options_data(message: Message, state: FSMContext):
         await message.answer(f"Ошибка обновления: {error_msg}",
                              reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(StateMachine.admin_main_menu)
+
 
 # === Обработка GET-ALL-USERS === #
 
