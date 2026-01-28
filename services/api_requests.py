@@ -141,3 +141,27 @@ class APIClient:
         finally:
             await self.session.close()
             self.session = None
+
+    @handle_errors_async_method
+    async def check_admin_rights(self, admin_id: int) -> bool:
+        """Проверить права администратора"""
+        self.session = aiohttp.ClientSession()
+        params = {"admin_id": admin_id}
+
+        try:
+            if debug_mode:
+                logger.info(f"Проверка прав администратора для {admin_id}")
+            async with self.session.get(f"{self.base_url}/admin/check_rights", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("is_admin")
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Ошибка {response.status}: {error_text}")
+                    return False
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return False
+        finally:
+            await self.session.close()
+            self.session = None

@@ -61,6 +61,15 @@ async def resolve_hello(message: Message):
 @handle_errors_async
 async def resolve_admin_menu(message: Message, state: FSMContext):
     """Показывает главное меню админки"""
+    api_client = APIClient(base_url)
+    is_admin = await api_client.check_admin_rights(message.from_user.id)
+    if not is_admin:
+        await message.answer(
+            "У вас нет прав администратора.\n\n"
+            "Для получения прав администратора обратитесь к разработчикам бота.",
+            parse_mode="HTML"
+        )
+        return
     await state.set_state(StateMachine.admin_main_menu)
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
