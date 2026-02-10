@@ -59,6 +59,31 @@ async def resolve_hello(message: Message):
     )
 
 
+@handle_errors_async
+async def resolve_unsupported_content(message: Message):
+    """Обработка нетекстовых сообщений (фото, файлы, голосовые и т.д.)"""
+    content_type_names = {
+        "photo": "фотографии",
+        "voice": "голосовые сообщения",
+        "audio": "аудио файлы",
+        "video": "видео",
+        "video_note": "видеосообщения",
+        "document": "файлы",
+        "sticker": "стикеры",
+        "animation": "GIF-анимации",
+        "location": "геолокацию",
+        "contact": "контакты"
+    }
+    
+    content_type = message.content_type
+    content_name = content_type_names.get(content_type, "такой тип сообщений")
+    
+    await message.answer(
+        f"Пока я не умею обрабатывать {content_name} \n\n"
+        "Давай лучше пообщаемся текстовыми сообщениями! Напиши мне что-нибудь",
+        parse_mode="HTML"
+    )
+
 # === Обработка АДМИН-ПАНЕЛИ === #
 
 async def _show_admin_menu(user_id: int, message: Message, state: FSMContext):

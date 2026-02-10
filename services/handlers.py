@@ -15,7 +15,8 @@ from services.resolver import (
     resolve_options_data,
     resolve_all_users,
     resolve_admin_back,
-    resolve_admin_exit
+    resolve_admin_exit,
+    resolve_unsupported_content
 )
 
 router = Router()
@@ -68,6 +69,48 @@ def setup_router():
     @router.message(StateMachine.admin_waiting_options_data)
     async def admin_process_options_data(message: Message, state: FSMContext):
         await resolve_options_data(message, state)
+
+    # === ОБРАБОТКА НЕТЕКСТОВЫХ СООБЩЕНИЙ === #
+
+    @router.message(F.photo)
+    async def handle_photo(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.voice)
+    async def handle_voice(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.audio)
+    async def handle_audio(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.video)
+    async def handle_video(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.video_note)
+    async def handle_video_note(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.document)
+    async def handle_document(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.sticker)
+    async def handle_sticker(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.animation)
+    async def handle_animation(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.location)
+    async def handle_location(message: Message):
+        await resolve_unsupported_content(message)
+
+    @router.message(F.contact)
+    async def handle_contact(message: Message):
+        await resolve_unsupported_content(message)
 
     # === ОБЫЧНОЕ ОБЩЕНИЕ (последний обработчик!) === #
 
