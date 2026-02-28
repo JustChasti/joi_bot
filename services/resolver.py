@@ -187,7 +187,8 @@ async def resolve_user_info_process(message: Message, state: FSMContext):
         data = response["data"]
         info_text = (
             f"Информация о пользователе {user_id}\n\n"
-            f"Premium: {data.get('premium', False)}\n"
+            f"Подписка: {data.get('active_subscriber', False)}\n"
+            f"Дата окончания если есть: {data.get('subscription_end', False)}\n"
             f"Бесплатных сообщений: {data.get('free_messages', 0)}\n"
             f"Осталось сообщений сегодня: {data.get('day_limit', 0)}\n"
             f"Admin: {data.get('is_admin', False)}"
@@ -230,9 +231,8 @@ async def resolve_options_user_id(message: Message, state: FSMContext):
     keyboard = get_back_to_menu_keyboard()
     await message.answer(
         f"Настройки для пользователя {user_id}\n\n"
-        "Формат: premium=true free_messages=100 day_limit=50\n\n"
+        "Формат: garbage_flag=true free_messages=100 day_limit=50\n\n"
         "Доступные поля:\n"
-        "premium (true/false)\n"
         "free_messages (число)\n"
         "is_admin (true/false)\n"
         "garbage_flag (true/false)\n"
