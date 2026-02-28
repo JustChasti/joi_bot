@@ -447,9 +447,6 @@ async def resolve_pay_stars(callback: CallbackQuery, state: FSMContext):
         await callback.message.answer("Неизвестный план. Попробуте снова.")
         return
 
-    # for tests
-    stars_amount = 1
-
     await callback.message.bot.send_invoice(
         chat_id=callback.from_user.id,
         title=f"Подписка Joi — {plan}",
