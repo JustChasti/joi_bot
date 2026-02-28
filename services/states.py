@@ -10,6 +10,9 @@ class StateMachine(StatesGroup):
     admin_waiting_user_id_for_options = State()
     admin_waiting_options_data = State()
 
+    # === ПОДПИСКА === #
+    subscription_menu = State()  # пользователь в меню выбора плана
+
     # === ОБЫЧНОЕ ОБЩЕНИЕ === #
     # (пока не нужны, но можно добавить позже)
     # conversation = State()

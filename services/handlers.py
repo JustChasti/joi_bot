@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, PreCheckoutQuery
 from aiogram.fsm.context import FSMContext
 
 from services.states import StateMachine
@@ -16,7 +16,14 @@ from services.resolver import (
     resolve_all_users,
     resolve_admin_back,
     resolve_admin_exit,
-    resolve_unsupported_content
+    resolve_unsupported_content,
+    resolve_buy_command,
+    resolve_subscription_cancel,
+    resolve_subscription_plan_selected,
+    resolve_subscription_back_to_plans,
+    resolve_pay_stars,
+    resolve_pre_checkout,
+    resolve_successful_payment
 )
 
 router = Router()
@@ -69,6 +76,36 @@ def setup_router():
     @router.message(StateMachine.admin_waiting_options_data)
     async def admin_process_options_data(message: Message, state: FSMContext):
         await resolve_options_data(message, state)
+
+# === ПОДПИСКА === #
+
+    @router.message(Command("buy"))
+    async def cmd_buy(message: Message, state: FSMContext):
+        await resolve_buy_command(message, state)
+
+    @router.callback_query(F.data == "sub_cancel")
+    async def sub_cancel(callback: CallbackQuery, state: FSMContext):
+        await resolve_subscription_cancel(callback, state)
+
+    @router.callback_query(F.data == "sub_back_to_plans")
+    async def sub_back_to_plans(callback: CallbackQuery, state: FSMContext):
+        await resolve_subscription_back_to_plans(callback, state)
+
+    @router.callback_query(F.data.startswith("sub_plan_"))
+    async def sub_plan_selected(callback: CallbackQuery, state: FSMContext):
+        await resolve_subscription_plan_selected(callback, state)
+
+    @router.callback_query(F.data.startswith("sub_pay_stars_"))
+    async def sub_pay_stars(callback: CallbackQuery, state: FSMContext):
+        await resolve_pay_stars(callback, state)
+
+    @router.pre_checkout_query()
+    async def pre_checkout(query: PreCheckoutQuery):
+        await resolve_pre_checkout(query)
+
+    @router.message(F.successful_payment)
+    async def successful_payment(message: Message, state: FSMContext):
+        await resolve_successful_payment(message, state)
 
     # === ОБРАБОТКА НЕТЕКСТОВЫХ СООБЩЕНИЙ === #
 

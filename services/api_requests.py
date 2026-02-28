@@ -15,51 +15,37 @@ class APIClient:
     async def send_message(self, user_id: int, text: str) -> Dict[str, Any]:
         """
         Отправляет сообщение на сервер
-        
+
         Args:
             user_id: ID пользователя Telegram
-            content: Текст сообщения
-            
+            text: Текст сообщения
+
         Returns:
-            Словарь с ответом от сервера
+            Словарь с ответом от сервера {"success": bool, "message": str}
         """
         self.session = aiohttp.ClientSession()
-
         payload = {
             "user_id": user_id,
             "content": text
-        }
-        answer = {
-            "text": "Джой приболела и не может ответить, но совсем скоро пойдет на поправку",
-            "details": None
         }
 
         try:
             if debug_mode:
                 logger.info(f"Отправка запроса на {self.base_url}/message: {payload}")
             async with self.session.post(f"{self.base_url}/message", json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    answer = {
-                        "text": data["message"],
-                        "details": None
-                    }
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Server returned status {response.status}: {error_text}")
-                    answer = {
-                        "text": "Джой задремала, но совсем скоро она проснется",
-                        "details": error_text
-                    }
+                data = await response.json()
+                if response.status != 200:
+                    logger.error(f"Server returned status {response.status}: {data}")
+                return data
         except aiohttp.ClientError as e:
             logger.error(f"Ошибка подключения: {e}")
-            answer = {
-                "text": "Джой приболела и не может ответить, но совсем скоро пойдет на поправку",
-                "details": str(e)
+            return {
+                "success": False,
+                "message": "Джой приболела и не может ответить, но совсем скоро пойдет на поправку"
             }
-        await self.session.close()
-        self.session = None
-        return answer
+        finally:
+            await self.session.close()
+            self.session = None
 
     @handle_errors_async_method
     async def get_user_info(self, admin_id: int, user_id: int) -> Dict[str, Any]:
@@ -147,7 +133,6 @@ class APIClient:
         """Проверить права администратора"""
         self.session = aiohttp.ClientSession()
         params = {"admin_id": admin_id}
-
         try:
             if debug_mode:
                 logger.info(f"Проверка прав администратора для {admin_id}")
@@ -162,6 +147,66 @@ class APIClient:
         except aiohttp.ClientError as e:
             logger.error(f"Ошибка подключения: {e}")
             return False
+        finally:
+            await self.session.close()
+            self.session = None
+
+    @handle_errors_async_method
+    async def get_subscription_status(self, telegram_id: int) -> Dict[str, Any]:
+        """Получить статус подписки пользователя"""
+        self.session = aiohttp.ClientSession()
+        params = {"telegram_id": telegram_id}
+        try:
+            async with self.session.get(f"{self.base_url}/subscription/status", params=params) as response:
+                data = await response.json()
+                return data
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
+
+    @handle_errors_async_method
+    async def get_pricing_stars(self) -> Dict[str, Any]:
+        """Получить цены в звёздах"""
+        self.session = aiohttp.ClientSession()
+        try:
+            async with self.session.get(f"{self.base_url}/subscription/pricing-stars") as response:
+                data = await response.json()
+                return data
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
+
+    @handle_errors_async_method
+    async def activate_subscription(
+        self,
+        telegram_id: int,
+        plan: str,
+        telegram_payment_id: str,
+        amount: int,
+        provider: str
+    ) -> Dict[str, Any]:
+        """Активировать подписку после оплаты"""
+        self.session = aiohttp.ClientSession()
+        payload = {
+            "telegram_id": telegram_id,
+            "plan": plan,
+            "telegram_payment_id": telegram_payment_id,
+            "amount": amount,
+            "provider": provider
+        }
+        try:
+            async with self.session.post(f"{self.base_url}/subscription/activate", json=payload) as response:
+                data = await response.json()
+                return data
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
         finally:
             await self.session.close()
             self.session = None

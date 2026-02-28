@@ -1,3 +1,4 @@
+from typing import Callable, Awaitable, Any
 from aiogram.types import (
     Message,
     CallbackQuery,
@@ -6,6 +7,7 @@ from aiogram.types import (
     BufferedInputFile
 )
 from aiogram.fsm.context import FSMContext
+from aiogram.types import LabeledPrice, PreCheckoutQuery
 from loguru import logger
 
 from config.config import base_url, text_hello
@@ -21,24 +23,38 @@ def get_back_to_menu_keyboard():
     ])
 
 
-# === Обработка КОМАНД ПОЛЬЗОВАТЕЛЯ === #
 @handle_errors_async
 async def resolve_model_message(message: Message):
-    """Обработка сообщений непосредственно к ЛЛМ"""
+    """ Основная функция и логика - отправка сообщений и получение ответа от сервера """
     user_id = message.from_user.id
     text = message.text
-    # Отправляем статус "печатает..."
-    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
     api_client = APIClient(base_url)
     response_data = await api_client.send_message(user_id, text)
-    answer = response_data["text"]
+
+    if not response_data.get("success", True):
+        code = response_data.get("message", "")
+
+        if code == "day_limit_exceeded":
+            await message.answer(
+                "На сегодня сообщения закончились — возвращайся завтра, продолжим"
+            )
+        elif code == "free_messages_exhausted":
+            await message.answer(
+                "Бесплатные сообщения закончились. Оформи подписку чтобы продолжить общение — /buy"
+            )
+        else:
+            logger.error(f"resolve_model_message: ошибка бэкенда для {user_id}: {code}")
+            await message.answer(
+                "Джой приболела и не может ответить, но совсем скоро пойдет на поправку"
+            )
+        return
+
+    answer = response_data.get("message", "")
     if len(answer) > 4000:
         answer = answer[:4000] + "\n...\n(ответ обрезан)"
-    await message.answer(
-        answer,
-        parse_mode="HTML"
-    )
+    await message.answer(answer, parse_mode="HTML")
 
 
 @handle_errors_async
@@ -52,7 +68,7 @@ async def resolve_hello(message: Message):
     except (FileNotFoundError, OSError) as e:
         logger.error(f"Ошибка при чтении файла {text_file}: {e}", exc_info=True)
         content = "Привет, Это Джой!\n Напиши мне что и получи новый опыт)"
-    help_text = f"{content}\n\n Доступные команды:\n /start /help - Показать эту справку"
+    help_text = f"{content}\n\n Доступные команды:\n /start /help - Показать эту справку \n /buy - Купить подписку \n /about - Информация о боте"
     await message.answer(
         help_text,
         parse_mode=None
@@ -74,10 +90,10 @@ async def resolve_unsupported_content(message: Message):
         "location": "геолокацию",
         "contact": "контакты"
     }
-    
+
     content_type = message.content_type
     content_name = content_type_names.get(content_type, "такой тип сообщений")
-    
+
     await message.answer(
         f"Пока я не умею обрабатывать {content_name} \n\n"
         "Давай лучше пообщаемся текстовыми сообщениями! Напиши мне что-нибудь",
@@ -296,3 +312,209 @@ async def resolve_all_users(callback: CallbackQuery, state: FSMContext):
         error_msg = response.get('error', 'Unknown error')
         await callback.message.answer(f"Ошибка получения списка: {error_msg}")
     await state.set_state(StateMachine.admin_main_menu)
+
+
+# === Подписка === #
+
+PLAN_LABELS = {
+    "month":   "1 месяц",
+    "3months": "3 месяца",
+    "year":    "1 год",
+}
+
+
+def get_subscription_keyboard(prices: dict) -> InlineKeyboardMarkup:
+    """Клавиатура выбора плана подписки"""
+    buttons = []
+    for plan, label in PLAN_LABELS.items():
+        sub = prices.get(plan)
+        if sub:
+            buttons.append([
+                InlineKeyboardButton(
+                    text=label,
+                    callback_data=f"sub_plan_{plan}"
+                )
+            ])
+    buttons.append([
+        InlineKeyboardButton(text="Отмена", callback_data="sub_cancel")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_payment_method_keyboard(plan: str) -> InlineKeyboardMarkup:
+    """Клавиатура выбора способа оплаты (пока только Stars)"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Оплатить звёздами ⭐",
+                callback_data=f"sub_pay_stars_{plan}"
+            )
+        ],
+        [
+            InlineKeyboardButton(text="Назад", callback_data="sub_back_to_plans")
+        ],
+    ])
+
+async def _show_subscription_menu(
+        user_id: int, state: FSMContext, send_fn: Callable[..., Awaitable[Any]]):
+    """Общая логика показа меню подписки"""
+    api_client = APIClient(base_url)
+    status = await api_client.get_subscription_status(user_id)
+    pricing = await api_client.get_pricing_stars()
+    if not pricing.get("success") or not status.get("success"):
+        logger.error(
+        f"не удалось получить данные для {user_id}:"
+        f"pricing={pricing.get('success')}, status={status.get('success')}"
+        )
+        await send_fn(
+            "Не удалось получить план для вашей подписки."
+            "Попробуйте позже или обратитесь в поддержку"
+        )
+        return
+
+    if status.get("active"):
+        end_date = status.get("end_date", "")
+        plan_label = PLAN_LABELS.get(status.get("plan"))
+        header = (
+            f"Ваша подписка: <b>{plan_label}</b>\n"
+            f"Действует до: <b>{end_date}</b>\n\n"
+            "Вы можете продлить ее одним из планов ниже:"
+        )
+    else:
+        header = "Подписка пока не оформлена.\n\nВыберите план:"
+
+    await state.set_state(StateMachine.subscription_menu)
+    await send_fn(
+        header,
+        reply_markup=get_subscription_keyboard(pricing["prices"]),
+        parse_mode="HTML"
+    )
+
+
+@handle_errors_async
+async def resolve_buy_command(message: Message, state: FSMContext):
+    """Показывает меню подписки по команде /buy"""
+    await _show_subscription_menu(message.from_user.id, state, message.answer)
+
+
+@handle_errors_async
+async def resolve_subscription_cancel(callback: CallbackQuery, state: FSMContext):
+    """Отмена — выход из меню подписки"""
+    await callback.answer()
+    await state.clear()
+    await callback.message.edit_text("Возвращайтесь к общению")
+
+
+@handle_errors_async
+async def resolve_subscription_plan_selected(callback: CallbackQuery, state: FSMContext):
+    """Пользователь выбрал план — показываем выбор способа оплаты"""
+    await callback.answer()
+    plan = callback.data.replace("sub_plan_", "")
+
+    await state.clear()
+
+    await callback.message.edit_text(
+        f"Выбран план: <b>{plan}</b>\n\n Способы оплаты:",
+        reply_markup=get_payment_method_keyboard(plan),
+        parse_mode="HTML"
+    )
+
+
+@handle_errors_async
+async def resolve_subscription_back_to_plans(callback: CallbackQuery, state: FSMContext):
+    """Возврат к выбору плана"""
+    await callback.answer()
+    await _show_subscription_menu(callback.from_user.id, state, callback.message.edit_text)
+
+
+@handle_errors_async
+async def resolve_pay_stars(callback: CallbackQuery, state: FSMContext):
+    """Пользователь выбрал оплату звёздами — отправляем инвойс"""
+    await callback.answer()
+    await state.clear()
+    plan = callback.data.replace("sub_pay_stars_", "")
+
+    api_client = APIClient(base_url)
+    pricing = await api_client.get_pricing_stars()
+
+    if not pricing.get("success"):
+        logger.error(f"resolve_pay_stars: не удалось получить цены: {pricing.get('error')}")
+        await callback.message.answer("Не удалось загрузить цены. Попробуйте позже.")
+        return
+
+    stars_amount = pricing["prices"].get(plan)
+    if not stars_amount:
+        await callback.message.answer("Неизвестный план. Попробуте снова.")
+        return
+
+    # for tests
+    stars_amount = 1
+
+    await callback.message.bot.send_invoice(
+        chat_id=callback.from_user.id,
+        title=f"Подписка Joi — {plan}",
+        description=f"Доступ к Joi на {plan}",
+        payload=plan,
+        currency="XTR",
+        prices=[LabeledPrice(label=f"Подписка {plan}", amount=stars_amount)],
+    )
+
+
+@handle_errors_async
+async def resolve_pre_checkout(query: PreCheckoutQuery):
+    """Telegram требует ответить в течение 10 секунд"""
+    user_id = query.from_user.id
+    api_client = APIClient(base_url)
+
+    try:
+        status = await api_client.get_subscription_status(user_id)
+        if not status.get("success"):
+            logger.error(f"resolve_pre_checkout: {user_id}: {status.get('error')}")
+            await query.answer(
+                ok=False,
+                error_message="Сервис временно недоступен, попробуйте позже"
+            )
+            return
+        await query.answer(ok=True)
+
+    except (OSError, ValueError, TypeError) as e:
+        logger.error(f"resolve_pre_checkout: неожиданная ошибка для {user_id}: {e}")
+        await query.answer(
+            ok=False,
+            error_message="Что-то пошло не так, попробуйте позже"
+        )
+
+
+@handle_errors_async
+async def resolve_successful_payment(message: Message, state: FSMContext):
+    """Оплата прошла — активируем подписку на бэкенде"""
+    payment = message.successful_payment
+    plan = payment.invoice_payload
+    api_client = APIClient(base_url)
+    result = await api_client.activate_subscription(
+        telegram_id=message.from_user.id,
+        plan=plan,
+        telegram_payment_id=payment.telegram_payment_charge_id,
+        amount=payment.total_amount,
+        provider="stars"
+    )
+
+    await state.clear()
+
+    if result.get("success"):
+        end_date = result.get("end_date", "")
+        plan_label = PLAN_LABELS.get(plan, plan)
+        await message.answer(
+            f"Подписка активирована!\n\n"
+            f"План: <b>{plan_label}</b>\n"
+            f"Действует до: <b>{end_date}</b>\n\n"
+            "Продолжаем",
+            parse_mode="HTML"
+        )
+    else:
+        error = result.get("error", "Unknown error")
+        logger.error(f"resolve_successful_payment: failed для {message.from_user.id}: {error}")
+        await message.answer(
+            "Оплата прошла, но возникла ошибка активации. "
+            "Обратись в поддержку — деньги не потеряются."
+        )
