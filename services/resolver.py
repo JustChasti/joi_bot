@@ -496,7 +496,7 @@ async def resolve_successful_payment(message: Message, state: FSMContext):
         plan=plan,
         telegram_payment_id=payment.telegram_payment_charge_id,
         amount=payment.total_amount,
-        provider="stars"
+        provider="telegram"
     )
 
     await state.clear()
