@@ -210,3 +210,68 @@ class APIClient:
         finally:
             await self.session.close()
             self.session = None
+
+    @handle_errors_async_method
+    async def delete_user(self, admin_id: int, user_id: int) -> Dict[str, Any]:
+        """Удалить пользователя и его историю"""
+        self.session = aiohttp.ClientSession()
+        payload = {
+            "admin_id": admin_id,
+            "user_id": user_id
+        }
+        try:
+            if debug_mode:
+                logger.info(f"Удаление пользователя {user_id}")
+            async with self.session.delete(f"{self.base_url}/admin/delete-user", json=payload) as response:
+                data = await response.json()
+                return data
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
+
+    @handle_errors_async_method
+    async def create_promo_code(self, admin_id: int, code: str, max_uses: int, free_messages: int) -> Dict[str, Any]:
+        """Создать промокод"""
+        self.session = aiohttp.ClientSession()
+        payload = {
+            "admin_id": admin_id,
+            "code": code,
+            "max_uses": max_uses,
+            "free_messages": free_messages
+        }
+        try:
+            if debug_mode:
+                logger.info(f"Создание промокода: {code}")
+            async with self.session.post(f"{self.base_url}/admin/promo", json=payload) as response:
+                data = await response.json()
+                return data
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
+
+    @handle_errors_async_method
+    async def redeem_promo_code(self, user_id: int, code: str) -> Dict[str, Any]:
+        """Активировать промокод"""
+        self.session = aiohttp.ClientSession()
+        payload = {
+            "user_id": user_id,
+            "code": code
+        }
+        try:
+            if debug_mode:
+                logger.info(f"Активация промокода {code} для {user_id}")
+            async with self.session.post(f"{self.base_url}/promo/redeem", json=payload) as response:
+                data = await response.json()
+                return data
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None

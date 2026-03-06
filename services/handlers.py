@@ -23,7 +23,13 @@ from services.resolver import (
     resolve_subscription_back_to_plans,
     resolve_pay_stars,
     resolve_pre_checkout,
-    resolve_successful_payment
+    resolve_successful_payment,
+    resolve_delete_user_request,
+    resolve_delete_user_process,
+    resolve_create_promo_request,
+    resolve_create_promo_process,
+    resolve_promo_command,
+    resolve_promo_code_entered,
 )
 
 router = Router()
@@ -76,6 +82,32 @@ def setup_router():
     @router.message(StateMachine.admin_waiting_options_data)
     async def admin_process_options_data(message: Message, state: FSMContext):
         await resolve_options_data(message, state)
+
+    @router.callback_query(F.data == "admin_delete_user", StateMachine.admin_main_menu)
+    async def admin_delete_user(callback: CallbackQuery, state: FSMContext):
+        await resolve_delete_user_request(callback, state)
+
+    @router.message(StateMachine.admin_waiting_user_id_for_delete)
+    async def admin_process_delete_user(message: Message, state: FSMContext):
+        await resolve_delete_user_process(message, state)
+
+    @router.callback_query(F.data == "admin_create_promo", StateMachine.admin_main_menu)
+    async def admin_create_promo(callback: CallbackQuery, state: FSMContext):
+        await resolve_create_promo_request(callback, state)
+
+    @router.message(StateMachine.admin_waiting_promo_data)
+    async def admin_process_promo_data(message: Message, state: FSMContext):
+        await resolve_create_promo_process(message, state)
+
+# === ПРОМОКОД === #
+
+    @router.message(Command("promo"))
+    async def cmd_promo(message: Message, state: FSMContext):
+        await resolve_promo_command(message, state)
+
+    @router.message(StateMachine.promo_waiting_code)
+    async def promo_code_entered(message: Message, state: FSMContext):
+        await resolve_promo_code_entered(message, state)
 
 # === ПОДПИСКА === #
 

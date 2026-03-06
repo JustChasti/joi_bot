@@ -117,9 +117,10 @@ async def _show_admin_menu(user_id: int, message: Message, state: FSMContext):
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Получить профиль user_id", callback_data="admin_user_info")],
-        [InlineKeyboardButton(text="Изменить настройки user_id",
-                              callback_data="admin_set_options")],
+        [InlineKeyboardButton(text="Изменить настройки user_id", callback_data="admin_set_options")],
         [InlineKeyboardButton(text="User_id всех пользователей", callback_data="admin_all_users")],
+        [InlineKeyboardButton(text="Удалить пользователя", callback_data="admin_delete_user")],
+        [InlineKeyboardButton(text="Создать промокод", callback_data="admin_create_promo")],
         [InlineKeyboardButton(text="Выход", callback_data="admin_exit")]
     ])
 
@@ -515,3 +516,154 @@ async def resolve_successful_payment(message: Message, state: FSMContext):
             "Оплата прошла, но возникла ошибка активации. "
             "Обратись в поддержку — деньги не потеряются."
         )
+
+
+@handle_errors_async
+async def resolve_delete_user_request(callback: CallbackQuery, state: FSMContext):
+    """Запрос ID пользователя для удаления"""
+    await callback.answer()
+    await state.set_state(StateMachine.admin_waiting_user_id_for_delete)
+    keyboard = get_back_to_menu_keyboard()
+    await callback.message.answer(
+        "Удаление пользователя\n\nВведите ID пользователя:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+
+@handle_errors_async
+async def resolve_delete_user_process(message: Message, state: FSMContext):
+    """Получили ID — сразу удаляем"""
+    try:
+        user_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("Неверный формат ID. Введите число:")
+        return
+
+    admin_id = message.from_user.id
+    keyboard = get_back_to_menu_keyboard()
+
+    api_client = APIClient(base_url)
+    response = await api_client.delete_user(admin_id, user_id)
+
+    if response.get("success"):
+        deleted = response.get("messages_deleted", 0)
+        await message.answer(
+            f"Пользователь {user_id} удалён.\n"
+            f"Удалено сообщений: {deleted}",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            response.get("error", "Unknown error"),
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    await state.set_state(StateMachine.admin_main_menu)
+
+
+@handle_errors_async
+async def resolve_create_promo_request(callback: CallbackQuery, state: FSMContext):
+    """Запрос данных для создания промокода"""
+    await callback.answer()
+    await state.set_state(StateMachine.admin_waiting_promo_data)
+    keyboard = get_back_to_menu_keyboard()
+    await callback.message.answer(
+        "Создание промокода\n\n"
+        "Введите данные в формате:\n"
+        "<code>КОД макс_использований бесплатных_сообщений</code>\n\n"
+        "Пример: WELCOME10 100 10",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+
+@handle_errors_async
+async def resolve_create_promo_process(message: Message, state: FSMContext):
+    """Парсит данные и создаёт промокод — пробрасываем error как есть"""
+    keyboard = get_back_to_menu_keyboard()
+    parts = message.text.strip().split()
+
+    if len(parts) != 3:
+        await message.answer(
+            "Неверный формат. Нужно 3 параметра:\n"
+            "<code>КОД макс_использований бесплатных_сообщений</code>",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        return
+
+    code = parts[0]
+    try:
+        max_uses = int(parts[1])
+        free_messages = int(parts[2])
+    except ValueError:
+        await message.answer(
+            "макс_использований и бесплатных_сообщений должны быть числами.",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        return
+
+    admin_id = message.from_user.id
+    api_client = APIClient(base_url)
+    response = await api_client.create_promo_code(admin_id, code, max_uses, free_messages)
+
+    if response.get("success"):
+        await message.answer(
+            f"Промокод создан!\n\n"
+            f"Код: <b>{code}</b>\n"
+            f"Макс. использований: {max_uses}\n"
+            f"Бесплатных сообщений: {free_messages}",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            response.get("error", "Unknown error"),
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    await state.set_state(StateMachine.admin_main_menu)
+
+
+# Маппинг серверных ошибок в пользовательский русский текст
+PROMO_ERROR_MESSAGES = {
+    "Promo code not found": "Промокод не найден",
+    "You have already used this promo code": "Ты уже использовал этот промокод",
+    "Promo code has no uses left": "Промокод больше не действует",
+    "Promo redeemed but failed to update user balance": "Произошла ошибка, обратись в поддержку",
+}
+
+@handle_errors_async
+async def resolve_promo_command(message: Message, state: FSMContext):
+    """Команда /promo — просит ввести код"""
+    await state.set_state(StateMachine.promo_waiting_code)
+    await message.answer(
+        "Введи промокод:",
+        parse_mode="HTML"
+    )
+
+
+@handle_errors_async
+async def resolve_promo_code_entered(message: Message, state: FSMContext):
+    """Пользователь ввёл промокод — активируем, ошибки показываем по-русски"""
+    code = message.text.strip()
+    user_id = message.from_user.id
+
+    api_client = APIClient(base_url)
+    response = await api_client.redeem_promo_code(user_id, code)
+
+    await state.clear()
+
+    if response.get("success"):
+        free = response.get("free_messages", 0)
+        await message.answer(
+            f"Промокод активирован! Тебе начислено {free} бесплатных сообщений",
+            parse_mode="HTML"
+        )
+    else:
+        server_error = response.get("error", "")
+        user_msg = PROMO_ERROR_MESSAGES.get(server_error, "Что-то пошло не так, попробуй позже")
+        await message.answer(user_msg, parse_mode="HTML")

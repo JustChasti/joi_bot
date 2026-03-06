@@ -9,9 +9,14 @@ class StateMachine(StatesGroup):
     admin_waiting_user_id_for_info = State()
     admin_waiting_user_id_for_options = State()
     admin_waiting_options_data = State()
+    admin_waiting_user_id_for_delete = State()
+    admin_waiting_promo_data = State()
 
     # === ПОДПИСКА === #
     subscription_menu = State()  # пользователь в меню выбора плана
+
+    # === ПРОМОКОД === #
+    promo_waiting_code = State() # пользователь вводит промокод для активации
 
     # === ОБЫЧНОЕ ОБЩЕНИЕ === #
     # (пока не нужны, но можно добавить позже)
