@@ -30,6 +30,7 @@ from services.resolver import (
     resolve_create_promo_process,
     resolve_promo_command,
     resolve_promo_code_entered,
+    resolve_about,
 )
 
 router = Router()
@@ -48,6 +49,10 @@ def setup_router():
     @router.message(Command("admin"))
     async def cmd_admin(message: Message, state: FSMContext):
         await resolve_admin_menu(message, state)
+
+    @router.message(Command("about"))
+    async def cmd_about(message: Message):
+        await resolve_about(message)
 
     # === АДМИН ПАНЕЛЬ === #
 

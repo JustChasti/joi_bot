@@ -667,3 +667,15 @@ async def resolve_promo_code_entered(message: Message, state: FSMContext):
         server_error = response.get("error", "")
         user_msg = PROMO_ERROR_MESSAGES.get(server_error, "Что-то пошло не так, попробуй позже")
         await message.answer(user_msg, parse_mode="HTML")
+
+
+@handle_errors_async
+async def resolve_about(message: Message):
+    """Команда /about — информация о боте"""
+    api_client = APIClient(base_url)
+    response = await api_client.get_about()
+
+    if response.get("success"):
+        await message.answer(response.get("text", ""), parse_mode="HTML")
+    else:
+        await message.answer("Не удалось загрузить информацию, попробуй позже")

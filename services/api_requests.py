@@ -275,3 +275,17 @@ class APIClient:
         finally:
             await self.session.close()
             self.session = None
+
+    @handle_errors_async_method
+    async def get_about(self) -> Dict[str, Any]:
+        """Получить текст 'О боте'"""
+        self.session = aiohttp.ClientSession()
+        try:
+            async with self.session.get(f"{self.base_url}/about") as response:
+                return await response.json()
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
