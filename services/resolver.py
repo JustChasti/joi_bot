@@ -68,7 +68,7 @@ async def resolve_hello(message: Message):
     except (FileNotFoundError, OSError) as e:
         logger.error(f"Ошибка при чтении файла {text_file}: {e}", exc_info=True)
         content = "Привет, Это Джой!\n Напиши мне что и получи новый опыт)"
-    help_text = f"{content}\n\n Доступные команды:\n /start /help - Показать эту справку \n /buy - Купить подписку \n /about - Информация о боте"
+    help_text = f"{content}\n\n Доступные команды:\n /start /help - Показать эту справку \n /buy - Купить подписку \n /promo - Ввести промокод \n /about - Информация о боте"
     await message.answer(
         help_text,
         parse_mode=None
