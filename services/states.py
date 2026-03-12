@@ -11,6 +11,8 @@ class StateMachine(StatesGroup):
     admin_waiting_options_data = State()
     admin_waiting_user_id_for_delete = State()
     admin_waiting_promo_data = State()
+    admin_waiting_send_message = State()
+    admin_waiting_broadcast = State()
 
     # === ПОДПИСКА === #
     subscription_menu = State()  # пользователь в меню выбора плана

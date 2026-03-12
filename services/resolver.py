@@ -121,6 +121,8 @@ async def _show_admin_menu(user_id: int, message: Message, state: FSMContext):
         [InlineKeyboardButton(text="User_id всех пользователей", callback_data="admin_all_users")],
         [InlineKeyboardButton(text="Удалить пользователя", callback_data="admin_delete_user")],
         [InlineKeyboardButton(text="Создать промокод", callback_data="admin_create_promo")],
+        [InlineKeyboardButton(text="Отправить сообщение", callback_data="admin_send_message")],
+        [InlineKeyboardButton(text="Массовая рассылка", callback_data="admin_broadcast")],
         [InlineKeyboardButton(text="Выход", callback_data="admin_exit")]
     ])
 
@@ -625,6 +627,108 @@ async def resolve_create_promo_process(message: Message, state: FSMContext):
             reply_markup=keyboard,
             parse_mode="HTML"
         )
+    await state.set_state(StateMachine.admin_main_menu)
+
+
+@handle_errors_async
+async def resolve_send_message_request(callback: CallbackQuery, state: FSMContext):
+    """ Отправка сообщения пользователю Запрос ID и текста сообщения"""
+    await callback.answer()
+    await state.set_state(StateMachine.admin_waiting_send_message)
+    keyboard = get_back_to_menu_keyboard()
+    await callback.message.answer(
+        "Отправка сообщения\n\n"
+        "Введите ID пользователя и текст через пробел:\n"
+        "<code>123456789 Привет, это тестовое сообщение</code>",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+
+@handle_errors_async
+async def resolve_send_message_process(message: Message, state: FSMContext):
+    """Отправка сообщения пользователю Парсим ID + текст и отправляем"""
+    keyboard = get_back_to_menu_keyboard()
+    parts = message.text.split(maxsplit=1)
+
+    if len(parts) < 2:
+        await message.answer(
+            "Нужно указать ID и текст через пробел.",
+            reply_markup=keyboard
+        )
+        return
+
+    try:
+        user_id = int(parts[0])
+    except ValueError:
+        await message.answer("Первый параметр должен быть числом (ID).", reply_markup=keyboard)
+        return
+
+    admin_id = message.from_user.id
+    api_client = APIClient(base_url)
+    response = await api_client.send_message_to_user(admin_id, user_id, parts[1])
+
+    if response.get("success"):
+        await message.answer(response.get("message", "OK"), reply_markup=keyboard)
+    else:
+        await message.answer(response.get("error", "Unknown error"), reply_markup=keyboard)
+    await state.set_state(StateMachine.admin_main_menu)
+
+
+@handle_errors_async
+async def resolve_broadcast_request(callback: CallbackQuery, state: FSMContext):
+    """Массовая рассылка Запрос процента и текста"""
+    await callback.answer()
+    await state.set_state(StateMachine.admin_waiting_broadcast)
+    keyboard = get_back_to_menu_keyboard()
+    await callback.message.answer(
+        "Массовая рассылка\n\n"
+        "Введите процент пользователей и текст через пробел:\n"
+        "<code>100 Привет всем!</code>",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+
+@handle_errors_async
+async def resolve_broadcast_process(message: Message, state: FSMContext):
+    """Массовая рассылка Парсим процент + текст и рассылаем"""
+    keyboard = get_back_to_menu_keyboard()
+    parts = message.text.split(maxsplit=1)
+
+    if len(parts) < 2:
+        await message.answer(
+            "Нужно указать процент и текст через пробел.",
+            reply_markup=keyboard
+        )
+        return
+    try:
+        percentage = int(parts[0])
+    except ValueError:
+        await message.answer("Первый параметр должен быть числом (процент).", reply_markup=keyboard)
+        return
+    if percentage < 1 or percentage > 100:
+        await message.answer("Процент должен быть от 1 до 100.", reply_markup=keyboard)
+        return
+
+    admin_id = message.from_user.id
+    api_client = APIClient(base_url)
+    response = await api_client.broadcast(admin_id, parts[1], percentage)
+
+    if response.get("success"):
+        total = response.get("total", 0)
+        attempted = response.get("attempted", 0)
+        sent = response.get("sent", 0)
+        await message.answer(
+            f"Рассылка завершена\n\n"
+            f"Всего пользователей: {total}\n"
+            f"Попыток отправки: {attempted}\n"
+            f"Успешно отправлено: {sent}",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(response.get("error", "Unknown error"), reply_markup=keyboard)
     await state.set_state(StateMachine.admin_main_menu)
 
 

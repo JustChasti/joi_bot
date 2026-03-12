@@ -289,3 +289,45 @@ class APIClient:
         finally:
             await self.session.close()
             self.session = None
+
+    @handle_errors_async_method
+    async def send_message_to_user(self, admin_id: int, user_id: int, message: str) -> Dict[str, Any]:
+        """Отправить сообщение пользователю"""
+        self.session = aiohttp.ClientSession()
+        payload = {
+            "admin_id": admin_id,
+            "user_id": user_id,
+            "message": message
+        }
+        try:
+            if debug_mode:
+                logger.info(f"Отправка сообщения пользователю {user_id}")
+            async with self.session.post(f"{self.base_url}/admin/send-message", json=payload) as response:
+                return await response.json()
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
+
+    @handle_errors_async_method
+    async def broadcast(self, admin_id: int, message: str, percentage: int) -> Dict[str, Any]:
+        """Массовая рассылка"""
+        self.session = aiohttp.ClientSession()
+        payload = {
+            "admin_id": admin_id,
+            "message": message,
+            "percentage": percentage
+        }
+        try:
+            if debug_mode:
+                logger.info(f"Рассылка: {percentage}% пользователей")
+            async with self.session.post(f"{self.base_url}/admin/broadcast", json=payload) as response:
+                return await response.json()
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None

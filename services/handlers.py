@@ -31,6 +31,10 @@ from services.resolver import (
     resolve_promo_command,
     resolve_promo_code_entered,
     resolve_about,
+    resolve_send_message_request,
+    resolve_send_message_process,
+    resolve_broadcast_request,
+    resolve_broadcast_process,
 )
 
 router = Router()
@@ -103,6 +107,22 @@ def setup_router():
     @router.message(StateMachine.admin_waiting_promo_data)
     async def admin_process_promo_data(message: Message, state: FSMContext):
         await resolve_create_promo_process(message, state)
+
+    @router.callback_query(F.data == "admin_send_message", StateMachine.admin_main_menu)
+    async def admin_send_message(callback: CallbackQuery, state: FSMContext):
+        await resolve_send_message_request(callback, state)
+
+    @router.message(StateMachine.admin_waiting_send_message)
+    async def admin_process_send_message(message: Message, state: FSMContext):
+        await resolve_send_message_process(message, state)
+
+    @router.callback_query(F.data == "admin_broadcast", StateMachine.admin_main_menu)
+    async def admin_broadcast(callback: CallbackQuery, state: FSMContext):
+        await resolve_broadcast_request(callback, state)
+
+    @router.message(StateMachine.admin_waiting_broadcast)
+    async def admin_process_broadcast(message: Message, state: FSMContext):
+        await resolve_broadcast_process(message, state)
 
 # === ПРОМОКОД === #
 
