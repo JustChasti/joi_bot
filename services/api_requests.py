@@ -31,8 +31,8 @@ class APIClient:
 
         try:
             if debug_mode:
-                logger.info(f"Отправка запроса на {self.base_url}/user/message: {payload}")
-            async with self.session.post(f"{self.base_url}/user/message", json=payload) as response:
+                logger.info(f"Отправка запроса на {self.base_url}/user/send-message: {payload}")
+            async with self.session.post(f"{self.base_url}/user/send-message", json=payload) as response:
                 data = await response.json()
                 if response.status != 200:
                     logger.error(f"Server returned status {response.status}: {data}")
@@ -336,7 +336,7 @@ class APIClient:
     async def get_user_stats(self, telegram_id: int) -> Dict[str, Any]:
         """Получить статистику пользователя для личного кабинета"""
         self.session = aiohttp.ClientSession()
-        payload = {"telegram_id": telegram_id}
+        payload = {"user_id": telegram_id}
         try:
             async with self.session.post(f"{self.base_url}/user/info", json=payload) as response:
                 data = await response.json()
