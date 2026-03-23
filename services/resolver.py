@@ -816,9 +816,9 @@ async def resolve_about(message: Message):
 
 # личный кабинет
 RELATIONSHIP_STAGE_LABELS = {
-    "acquaintance": "Знакомый",
-    "friend": "Друг",
-    "romantic": "Романтические отношения",
+    "acquaintance": "Знакомство",
+    "friend": "Дружба",
+    "romantic": "Отношения",
 }
 
 # Порядок стадий и их позиция на шкале (0.0 - 1.0)
