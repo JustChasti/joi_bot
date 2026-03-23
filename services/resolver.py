@@ -879,9 +879,10 @@ async def resolve_menu_button(message: Message, state: FSMContext):
         return
 
     # Парсим данные
-    active_sub = response.get("active_subscriber", False)
-    sub_end = response.get("subscription_end", "")
-    free_messages = response.get("free_messages", 0)
+    data = response.get("data", {})
+    active_sub = data.get("active_subscriber", False)
+    sub_end = data.get("subscription_end", "")
+    free_messages = data.get("free_messages", 0)
 
     if active_sub and sub_end:
         sub_status = f"активна (до {sub_end})"
@@ -900,7 +901,9 @@ async def resolve_menu_button(message: Message, state: FSMContext):
     )
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Показать прогресс отношений", callback_data="menu_relationship")],
+        [InlineKeyboardButton(
+            text="Показать прогресс отношений", callback_data="menu_relationship")
+        ],
         [InlineKeyboardButton(text="Ввести промокод", callback_data="menu_promo")],
         [InlineKeyboardButton(text="Купить подписку", callback_data="menu_buy")],
     ])
@@ -923,9 +926,12 @@ async def resolve_menu_relationship(callback: CallbackQuery):
         )
         return
 
-    stage = response.get("relationship_stage", "acquaintance")
+    data = response.get("data", {})
+    stage = data.get("relationship_stage", "acquaintance")
     progress_text = build_relationship_progress(stage)
-    await callback.message.answer(progress_text, parse_mode="HTML", reply_markup=get_menu_keyboard())
+    await callback.message.answer(
+        progress_text, parse_mode="HTML", reply_markup=get_menu_keyboard()
+    )
 
 
 @handle_errors_async
