@@ -31,8 +31,8 @@ class APIClient:
 
         try:
             if debug_mode:
-                logger.info(f"Отправка запроса на {self.base_url}/message: {payload}")
-            async with self.session.post(f"{self.base_url}/message", json=payload) as response:
+                logger.info(f"Отправка запроса на {self.base_url}/user/message: {payload}")
+            async with self.session.post(f"{self.base_url}/user/message", json=payload) as response:
                 data = await response.json()
                 if response.status != 200:
                     logger.error(f"Server returned status {response.status}: {data}")
@@ -325,6 +325,22 @@ class APIClient:
                 logger.info(f"Рассылка: {percentage}% пользователей")
             async with self.session.post(f"{self.base_url}/admin/broadcast", json=payload) as response:
                 return await response.json()
+        except aiohttp.ClientError as e:
+            logger.error(f"Ошибка подключения: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            await self.session.close()
+            self.session = None
+
+    @handle_errors_async_method
+    async def get_user_stats(self, telegram_id: int) -> Dict[str, Any]:
+        """Получить статистику пользователя для личного кабинета"""
+        self.session = aiohttp.ClientSession()
+        payload = {"telegram_id": telegram_id}
+        try:
+            async with self.session.post(f"{self.base_url}/user/info", json=payload) as response:
+                data = await response.json()
+                return data
         except aiohttp.ClientError as e:
             logger.error(f"Ошибка подключения: {e}")
             return {"success": False, "error": str(e)}

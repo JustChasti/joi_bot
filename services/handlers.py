@@ -35,6 +35,10 @@ from services.resolver import (
     resolve_send_message_process,
     resolve_broadcast_request,
     resolve_broadcast_process,
+    resolve_menu_button,
+    resolve_menu_relationship,
+    resolve_menu_promo,
+    resolve_menu_buy,
 )
 
 router = Router()
@@ -163,6 +167,24 @@ def setup_router():
     @router.message(F.successful_payment)
     async def successful_payment(message: Message, state: FSMContext):
         await resolve_successful_payment(message, state)
+
+    # === ЛИЧНЫЙ КАБИНЕТ === #
+
+    @router.message(F.text == "Меню 📊")
+    async def handle_menu_button(message: Message, state: FSMContext):
+        await resolve_menu_button(message, state)
+
+    @router.callback_query(F.data == "menu_relationship")
+    async def menu_relationship(callback: CallbackQuery):
+        await resolve_menu_relationship(callback)
+
+    @router.callback_query(F.data == "menu_promo")
+    async def menu_promo(callback: CallbackQuery, state: FSMContext):
+        await resolve_menu_promo(callback, state)
+
+    @router.callback_query(F.data == "menu_buy")
+    async def menu_buy(callback: CallbackQuery, state: FSMContext):
+        await resolve_menu_buy(callback, state)
 
     # === ОБРАБОТКА НЕТЕКСТОВЫХ СООБЩЕНИЙ === #
 
