@@ -1,349 +1,141 @@
-from typing import Dict, Any
+from typing import Any
 import aiohttp
 from loguru import logger
-from config.config import debug_mode
-from services.decorators import handle_errors_async_method
+from config.config import debug_mode, BASE_URL
+from services.decorators import handle_api_errors
 
 
 class APIClient:
     """Клиент для работы с API сервера"""
-    def __init__(self, base_url: str):
-        self.base_url = base_url
-        self.session = None
 
-    @handle_errors_async_method
-    async def send_message(self, user_id: int, text: str) -> Dict[str, Any]:
-        """
-        Отправляет сообщение на сервер
+    _instance = None
 
-        Args:
-            user_id: ID пользователя Telegram
-            text: Текст сообщения
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
-        Returns:
-            Словарь с ответом от сервера {"success": bool, "message": str}
-        """
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "user_id": user_id,
-            "content": text
-        }
+    def __init__(self, url: str):
+        if not hasattr(self, '_initialized'):
+            self.base_url = url
+            self._session = None
+            self._initialized = True
 
-        try:
-            if debug_mode:
-                logger.info(f"Отправка запроса на {self.base_url}/user/send-message: {payload}")
-            async with self.session.post(f"{self.base_url}/user/send-message", json=payload) as response:
-                data = await response.json()
-                if response.status != 200:
-                    logger.error(f"Server returned status {response.status}: {data}")
-                return data
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {
-                "success": False,
-                "message": "Джой приболела и не может ответить, но совсем скоро пойдет на поправку"
-            }
-        finally:
-            await self.session.close()
-            self.session = None
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
-    @handle_errors_async_method
-    async def get_user_info(self, admin_id: int, user_id: int) -> Dict[str, Any]:
-        """Получить информацию о пользователе"""
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "admin_id": admin_id,
-            "user_id": user_id
-        }
+    async def close(self):
+        "Закрывает aiohttp сессию"
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
 
-        try:
-            if debug_mode:
-                logger.info(f"Запрос информации о пользователе {user_id}")
-            async with self.session.post(f"{self.base_url}/admin/get-info", json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка {response.status}: {error_text}")
-                    return {"error": f"Status {response.status}", "details": error_text}
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"error": "Connection error", "details": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+    @handle_api_errors
+    async def _request(self, method: str, path: str, **kwargs) -> dict[str, Any]:
+        session = await self._get_session()
+        url = f"{self.base_url}{path}"
+        if debug_mode:
+            logger.debug(f"{method} {url}")
+        async with session.request(method, url, **kwargs) as response:
+            data = await response.json()
+            if response.status != 200:
+                logger.error(f"{method} {url} -> {response.status}: {data}")
+            return data
 
+    # Обработка запросов пользователя #
 
-    @handle_errors_async_method
-    async def set_user_options(self, admin_id: int, user_id: int, options: Dict[str, Any]) -> Dict[str, Any]:
-        """Изменить настройки пользователя"""
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "admin_id": admin_id,
-            "user_id": user_id,
-            "options": options
-        }
+    async def send_message(self, user_id: int, text: str) -> dict[str, Any]:
+        "Добавить сообщение пользователя в диалог и получить ответ от бота"
+        return await self._request("POST", "/user/send-message",
+                                   json={"user_id": user_id, "content": text}
+                                  )
 
-        try:
-            if debug_mode:
-                logger.info(f"Изменение настроек пользователя {user_id}")
-            async with self.session.patch(f"{self.base_url}/admin/set-options", json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка {response.status}: {error_text}")
-                    return {"error": f"Status {response.status}", "details": error_text}
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"error": "Connection error", "details": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+    async def get_user_stats(self, telegram_id: int) -> dict[str, Any]:
+        "Получить статистику пользователя для личного кабинета"
+        return await self._request("POST", "/user/info", 
+                                   json={"user_id": telegram_id}
+                                  )
 
+    async def get_about(self) -> dict[str, Any]:
+        "Получить информацию о боте"
+        return await self._request("GET", "/about")
 
-    @handle_errors_async_method
-    async def get_all_users(self, admin_id: int) -> Dict[str, Any]:
-        """Получить список всех пользователей"""
-        self.session = aiohttp.ClientSession()
-        params = {"admin_id": admin_id}
+    async def redeem_promo_code(self, user_id: int, code: str) -> dict[str, Any]:
+        return await self._request("POST", "/promo/redeem",
+            json={"user_id": user_id, "code": code}
+        )
 
-        try:
-            if debug_mode:
-                logger.info("Запрос списка всех пользователей")
-            async with self.session.get(f"{self.base_url}/admin/users", params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка {response.status}: {error_text}")
-                    return {"error": f"Status {response.status}", "details": error_text}
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"error": "Connection error", "details": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+    # === Подписка прайс и активация === #
 
-    @handle_errors_async_method
-    async def check_admin_rights(self, admin_id: int) -> bool:
-        """Проверить права администратора"""
-        self.session = aiohttp.ClientSession()
-        params = {"admin_id": admin_id}
-        try:
-            if debug_mode:
-                logger.info(f"Проверка прав администратора для {admin_id}")
-            async with self.session.get(f"{self.base_url}/admin/check_rights", params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get("is_admin")
-                else:
-                    error_text = await response.text()
-                    logger.error(f"Ошибка {response.status}: {error_text}")
-                    return False
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return False
-        finally:
-            await self.session.close()
-            self.session = None
+    async def get_subscription_status(self, telegram_id: int) -> dict[str, Any]:
+        return await self._request("GET", "/subscription/status",
+            params={"telegram_id": telegram_id}
+        )
 
-    @handle_errors_async_method
-    async def get_subscription_status(self, telegram_id: int) -> Dict[str, Any]:
-        """Получить статус подписки пользователя"""
-        self.session = aiohttp.ClientSession()
-        params = {"telegram_id": telegram_id}
-        try:
-            async with self.session.get(f"{self.base_url}/subscription/status", params=params) as response:
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+    async def get_pricing_stars(self) -> dict[str, Any]:
+        return await self._request("GET", "/subscription/pricing-stars")
 
-    @handle_errors_async_method
-    async def get_pricing_stars(self) -> Dict[str, Any]:
-        """Получить цены в звёздах"""
-        self.session = aiohttp.ClientSession()
-        try:
-            async with self.session.get(f"{self.base_url}/subscription/pricing-stars") as response:
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
-
-    @handle_errors_async_method
     async def activate_subscription(
-        self,
-        telegram_id: int,
-        plan: str,
-        telegram_payment_id: str,
-        amount: int,
-        provider: str
-    ) -> Dict[str, Any]:
-        """Активировать подписку после оплаты"""
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "telegram_id": telegram_id,
+        self, telegram_id: int, plan: str, telegram_payment_id: str, amount: int, provider: str,
+    ) -> dict[str, Any]:
+        return await self._request("POST", "/subscription/activate", json={
+            "telegram_id": telegram_id, 
             "plan": plan,
             "telegram_payment_id": telegram_payment_id,
             "amount": amount,
             "provider": provider
-        }
-        try:
-            async with self.session.post(f"{self.base_url}/subscription/activate", json=payload) as response:
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+        })
 
-    @handle_errors_async_method
-    async def delete_user(self, admin_id: int, user_id: int) -> Dict[str, Any]:
-        """Удалить пользователя и его историю"""
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "admin_id": admin_id,
-            "user_id": user_id
-        }
-        try:
-            if debug_mode:
-                logger.info(f"Удаление пользователя {user_id}")
-            async with self.session.delete(f"{self.base_url}/admin/delete-user", json=payload) as response:
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+    # === Admin === #
 
-    @handle_errors_async_method
-    async def create_promo_code(self, admin_id: int, code: str, max_uses: int, free_messages: int) -> Dict[str, Any]:
-        """Создать промокод"""
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "admin_id": admin_id,
-            "code": code,
-            "max_uses": max_uses,
+    async def check_admin_rights(self, admin_id: int) -> dict[str, Any]:
+        return await self._request("GET", "/admin/check_rights",
+            params={"admin_id": admin_id}
+        )
+
+    async def get_user_info(self, admin_id: int, user_id: int) -> dict[str, Any]:
+        return await self._request("POST", "/admin/get-info", json={
+            "admin_id": admin_id, "user_id": user_id
+        })
+
+    async def set_user_options(
+        self, admin_id: int, user_id: int, options: dict[str, Any]
+    ) -> dict[str, Any]:
+        return await self._request("PATCH", "/admin/set-options", json={
+            "admin_id": admin_id, "user_id": user_id, "options": options,
+        })
+
+    async def get_all_users(self, admin_id: int) -> dict[str, Any]:
+        return await self._request("GET", "/admin/users", params={"admin_id": admin_id})
+
+    async def delete_user(self, admin_id: int, user_id: int) -> dict[str, Any]:
+        return await self._request("DELETE", "/admin/delete-user",
+            json={"admin_id": admin_id, "user_id": user_id}
+        )
+
+    async def create_promo_code(
+        self, admin_id: int, code: str, max_uses: int, free_messages: int
+    ) -> dict[str, Any]:
+        return await self._request("POST", "/admin/promo", json={
+            "admin_id": admin_id, "code": code, "max_uses": max_uses,
             "free_messages": free_messages
-        }
-        try:
-            if debug_mode:
-                logger.info(f"Создание промокода: {code}")
-            async with self.session.post(f"{self.base_url}/admin/promo", json=payload) as response:
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+        })
 
-    @handle_errors_async_method
-    async def redeem_promo_code(self, user_id: int, code: str) -> Dict[str, Any]:
-        """Активировать промокод"""
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "user_id": user_id,
-            "code": code
-        }
-        try:
-            if debug_mode:
-                logger.info(f"Активация промокода {code} для {user_id}")
-            async with self.session.post(f"{self.base_url}/promo/redeem", json=payload) as response:
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+    async def send_message_to_user(
+        self, admin_id: int, user_id: int, message: str
+    ) -> dict[str, Any]:
+        return await self._request("POST", "/admin/send-message", json={
+            "admin_id": admin_id, "user_id": user_id, "message": message
+        })
 
-    @handle_errors_async_method
-    async def get_about(self) -> Dict[str, Any]:
-        """Получить текст 'О боте'"""
-        self.session = aiohttp.ClientSession()
-        try:
-            async with self.session.get(f"{self.base_url}/about") as response:
-                return await response.json()
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+    async def broadcast(
+        self, admin_id: int, message: str, percentage: int
+    ) -> dict[str, Any]:
+        return await self._request("POST", "/admin/broadcast", json={
+            "admin_id": admin_id, "message": message, "percentage": percentage
+        })
 
-    @handle_errors_async_method
-    async def send_message_to_user(self, admin_id: int, user_id: int, message: str) -> Dict[str, Any]:
-        """Отправить сообщение пользователю"""
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "admin_id": admin_id,
-            "user_id": user_id,
-            "message": message
-        }
-        try:
-            if debug_mode:
-                logger.info(f"Отправка сообщения пользователю {user_id}")
-            async with self.session.post(f"{self.base_url}/admin/send-message", json=payload) as response:
-                return await response.json()
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
 
-    @handle_errors_async_method
-    async def broadcast(self, admin_id: int, message: str, percentage: int) -> Dict[str, Any]:
-        """Массовая рассылка"""
-        self.session = aiohttp.ClientSession()
-        payload = {
-            "admin_id": admin_id,
-            "message": message,
-            "percentage": percentage
-        }
-        try:
-            if debug_mode:
-                logger.info(f"Рассылка: {percentage}% пользователей")
-            async with self.session.post(f"{self.base_url}/admin/broadcast", json=payload) as response:
-                return await response.json()
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
-
-    @handle_errors_async_method
-    async def get_user_stats(self, telegram_id: int) -> Dict[str, Any]:
-        """Получить статистику пользователя для личного кабинета"""
-        self.session = aiohttp.ClientSession()
-        payload = {"user_id": telegram_id}
-        try:
-            async with self.session.post(f"{self.base_url}/user/info", json=payload) as response:
-                data = await response.json()
-                return data
-        except aiohttp.ClientError as e:
-            logger.error(f"Ошибка подключения: {e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            await self.session.close()
-            self.session = None
+api_client = APIClient(BASE_URL)

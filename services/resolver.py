@@ -12,9 +12,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import LabeledPrice, PreCheckoutQuery
 from loguru import logger
 
-from config.config import base_url, text_hello
-from services.api_requests import APIClient
-from services.decorators import handle_errors_async
+from config.config import HELLO_TEXT_PATH
+from services.api_requests import api_client
+from services.decorators import handle_resolver_errors
 from services.states import StateMachine
 
 
@@ -34,14 +34,13 @@ def get_menu_keyboard():
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_model_message(message: Message):
     """ Основная функция и логика - отправка сообщений и получение ответа от сервера """
     user_id = message.from_user.id
     text = message.text
 
     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    api_client = APIClient(base_url)
     response_data = await api_client.send_message(user_id, text)
 
     if not response_data.get("success", True):
@@ -71,10 +70,10 @@ async def resolve_model_message(message: Message):
     await message.answer(answer, parse_mode="HTML", reply_markup=get_menu_keyboard())
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_hello(message: Message):
     """ Читает заготовленный файл и отправляет пользователю"""
-    text_file = text_hello
+    text_file = HELLO_TEXT_PATH
     content = ""
     try:
         with open(text_file, 'r', encoding='utf-8') as f:
@@ -90,7 +89,7 @@ async def resolve_hello(message: Message):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_unsupported_content(message: Message):
     """Обработка нетекстовых сообщений (фото, файлы, голосовые и т.д.)"""
     content_type_names = {
@@ -118,11 +117,10 @@ async def resolve_unsupported_content(message: Message):
 
 # === Обработка АДМИН-ПАНЕЛИ === #
 
-async def _show_admin_menu(user_id: int, message: Message, state: FSMContext):
+async def _show_admin_menu(message: Message, user_id: int, state: FSMContext):
     """Показывает главное меню админки"""
-    api_client = APIClient(base_url)
-    is_admin = await api_client.check_admin_rights(user_id)
-    if not is_admin:
+    response = await api_client.check_admin_rights(user_id)
+    if not response.get("is_admin"):
         await message.answer(
             "У вас нет прав администратора.\n\n"
             "Для получения прав администратора обратитесь к разработчикам бота.",
@@ -150,22 +148,22 @@ async def _show_admin_menu(user_id: int, message: Message, state: FSMContext):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_admin_menu(message: Message, state: FSMContext):
     """Показывает админ-панель (вызов через команду /admin)"""
     user_id = message.from_user.id
-    await _show_admin_menu(user_id, message, state)
+    await _show_admin_menu(message, user_id, state)
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_admin_back(callback: CallbackQuery, state: FSMContext):
     """Возврат в меню админки (вызов через кнопку)"""
     await callback.answer()
     user_id = callback.from_user.id
-    await _show_admin_menu(user_id, callback.message, state)
+    await _show_admin_menu(callback.message, user_id, state)
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_admin_exit(callback: CallbackQuery, state: FSMContext):
     """Выход из админки"""
     await callback.answer()
@@ -177,7 +175,7 @@ async def resolve_admin_exit(callback: CallbackQuery, state: FSMContext):
 
 # === Обработка GET-USER-INFO === #
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_user_info_request(callback: CallbackQuery, state: FSMContext):
     """Запрос ID пользователя для получения информации"""
     await callback.answer()
@@ -191,7 +189,7 @@ async def resolve_user_info_request(callback: CallbackQuery, state: FSMContext):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_user_info_process(message: Message, state: FSMContext):
     """Получение информации о пользователе"""
     try:
@@ -201,7 +199,6 @@ async def resolve_user_info_process(message: Message, state: FSMContext):
         return
 
     admin_id = message.from_user.id
-    api_client = APIClient(base_url)
     response = await api_client.get_user_info(admin_id, user_id)
 
     if response.get("data"):
@@ -226,7 +223,7 @@ async def resolve_user_info_process(message: Message, state: FSMContext):
 
 # === Обработка SET-USER-OPTIONS === #
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_options_request(callback: CallbackQuery, state: FSMContext):
     """Запрос ID пользователя для изменения параметров"""
     await callback.answer()
@@ -239,7 +236,7 @@ async def resolve_options_request(callback: CallbackQuery, state: FSMContext):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_options_user_id(message: Message, state: FSMContext):
     """Сохраняет ID и запрашивает настройки"""
     try:
@@ -263,7 +260,7 @@ async def resolve_options_user_id(message: Message, state: FSMContext):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_options_data(message: Message, state: FSMContext):
     """Парсит и применяет настройки"""
     data = await state.get_data()
@@ -291,7 +288,6 @@ async def resolve_options_data(message: Message, state: FSMContext):
                              reply_markup=keyboard, parse_mode="HTML")
         return
     admin_id = message.from_user.id
-    api_client = APIClient(base_url)
     response = await api_client.set_user_options(admin_id, target_user_id, options)
     if response.get("success"):
         await message.answer(
@@ -307,12 +303,11 @@ async def resolve_options_data(message: Message, state: FSMContext):
 
 # === Обработка GET-ALL-USERS === #
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_all_users(callback: CallbackQuery, state: FSMContext):
     """Получает список всех пользователей и отправляет файлом"""
     await callback.answer()
     admin_id = callback.from_user.id
-    api_client = APIClient(base_url)
     keyboard = get_back_to_admin_menu_keyboard()
     response = await api_client.get_all_users(admin_id)
     if "users" in response:
@@ -379,7 +374,6 @@ def get_payment_method_keyboard(plan: str) -> InlineKeyboardMarkup:
 async def _show_subscription_menu(
         user_id: int, state: FSMContext, send_fn: Callable[..., Awaitable[Any]]):
     """Общая логика показа меню подписки"""
-    api_client = APIClient(base_url)
     status = await api_client.get_subscription_status(user_id)
     pricing = await api_client.get_pricing_stars()
     if not pricing.get("success") or not status.get("success"):
@@ -412,13 +406,13 @@ async def _show_subscription_menu(
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_buy_command(message: Message, state: FSMContext):
     """Показывает меню подписки по команде /buy"""
     await _show_subscription_menu(message.from_user.id, state, message.answer)
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_subscription_cancel(callback: CallbackQuery, state: FSMContext):
     """Отмена — выход из меню подписки"""
     await callback.answer()
@@ -426,7 +420,7 @@ async def resolve_subscription_cancel(callback: CallbackQuery, state: FSMContext
     await callback.message.edit_text("Возвращайтесь к общению")
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_subscription_plan_selected(callback: CallbackQuery, state: FSMContext):
     """Пользователь выбрал план — показываем выбор способа оплаты"""
     await callback.answer()
@@ -441,21 +435,19 @@ async def resolve_subscription_plan_selected(callback: CallbackQuery, state: FSM
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_subscription_back_to_plans(callback: CallbackQuery, state: FSMContext):
     """Возврат к выбору плана"""
     await callback.answer()
     await _show_subscription_menu(callback.from_user.id, state, callback.message.edit_text)
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_pay_stars(callback: CallbackQuery, state: FSMContext):
     """Пользователь выбрал оплату звёздами — отправляем инвойс"""
     await callback.answer()
     await state.clear()
     plan = callback.data.replace("sub_pay_stars_", "")
-
-    api_client = APIClient(base_url)
     pricing = await api_client.get_pricing_stars()
 
     if not pricing.get("success"):
@@ -482,12 +474,10 @@ async def resolve_pay_stars(callback: CallbackQuery, state: FSMContext):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_pre_checkout(query: PreCheckoutQuery):
     """Telegram требует ответить в течение 10 секунд"""
     user_id = query.from_user.id
-    api_client = APIClient(base_url)
-
     try:
         status = await api_client.get_subscription_status(user_id)
         if not status.get("success"):
@@ -507,12 +497,11 @@ async def resolve_pre_checkout(query: PreCheckoutQuery):
         )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_successful_payment(message: Message, state: FSMContext):
     """Оплата прошла — активируем подписку на бэкенде"""
     payment = message.successful_payment
     plan = payment.invoice_payload
-    api_client = APIClient(base_url)
     result = await api_client.activate_subscription(
         telegram_id=message.from_user.id,
         plan=plan,
@@ -544,7 +533,7 @@ async def resolve_successful_payment(message: Message, state: FSMContext):
         )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_delete_user_request(callback: CallbackQuery, state: FSMContext):
     """Запрос ID пользователя для удаления"""
     await callback.answer()
@@ -557,7 +546,7 @@ async def resolve_delete_user_request(callback: CallbackQuery, state: FSMContext
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_delete_user_process(message: Message, state: FSMContext):
     """Получили ID — сразу удаляем"""
     try:
@@ -568,8 +557,6 @@ async def resolve_delete_user_process(message: Message, state: FSMContext):
 
     admin_id = message.from_user.id
     keyboard = get_back_to_admin_menu_keyboard()
-
-    api_client = APIClient(base_url)
     response = await api_client.delete_user(admin_id, user_id)
 
     if response.get("success"):
@@ -589,7 +576,7 @@ async def resolve_delete_user_process(message: Message, state: FSMContext):
     await state.set_state(StateMachine.admin_main_menu)
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_create_promo_request(callback: CallbackQuery, state: FSMContext):
     """Запрос данных для создания промокода"""
     await callback.answer()
@@ -605,7 +592,7 @@ async def resolve_create_promo_request(callback: CallbackQuery, state: FSMContex
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_create_promo_process(message: Message, state: FSMContext):
     """Парсит данные и создаёт промокод — пробрасываем error как есть"""
     keyboard = get_back_to_admin_menu_keyboard()
@@ -633,7 +620,6 @@ async def resolve_create_promo_process(message: Message, state: FSMContext):
         return
 
     admin_id = message.from_user.id
-    api_client = APIClient(base_url)
     response = await api_client.create_promo_code(admin_id, code, max_uses, free_messages)
 
     if response.get("success"):
@@ -654,7 +640,7 @@ async def resolve_create_promo_process(message: Message, state: FSMContext):
     await state.set_state(StateMachine.admin_main_menu)
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_send_message_request(callback: CallbackQuery, state: FSMContext):
     """ Отправка сообщения пользователю Запрос ID и текста сообщения"""
     await callback.answer()
@@ -669,7 +655,7 @@ async def resolve_send_message_request(callback: CallbackQuery, state: FSMContex
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_send_message_process(message: Message, state: FSMContext):
     """Отправка сообщения пользователю Парсим ID + текст и отправляем"""
     keyboard = get_back_to_admin_menu_keyboard()
@@ -689,7 +675,6 @@ async def resolve_send_message_process(message: Message, state: FSMContext):
         return
 
     admin_id = message.from_user.id
-    api_client = APIClient(base_url)
     response = await api_client.send_message_to_user(admin_id, user_id, parts[1])
 
     if response.get("success"):
@@ -699,7 +684,7 @@ async def resolve_send_message_process(message: Message, state: FSMContext):
     await state.set_state(StateMachine.admin_main_menu)
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_broadcast_request(callback: CallbackQuery, state: FSMContext):
     """Массовая рассылка Запрос процента и текста"""
     await callback.answer()
@@ -714,7 +699,7 @@ async def resolve_broadcast_request(callback: CallbackQuery, state: FSMContext):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_broadcast_process(message: Message, state: FSMContext):
     """Массовая рассылка Парсим процент + текст и рассылаем"""
     keyboard = get_back_to_admin_menu_keyboard()
@@ -736,7 +721,6 @@ async def resolve_broadcast_process(message: Message, state: FSMContext):
         return
 
     admin_id = message.from_user.id
-    api_client = APIClient(base_url)
     response = await api_client.broadcast(admin_id, parts[1], percentage)
 
     if response.get("success"):
@@ -764,7 +748,7 @@ PROMO_ERROR_MESSAGES = {
     "Promo redeemed but failed to update user balance": "Произошла ошибка, обратись в поддержку",
 }
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_promo_command(message: Message, state: FSMContext):
     """Команда /promo — просит ввести код"""
     await state.set_state(StateMachine.promo_waiting_code)
@@ -774,13 +758,12 @@ async def resolve_promo_command(message: Message, state: FSMContext):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_promo_code_entered(message: Message, state: FSMContext):
     """Пользователь ввёл промокод — активируем"""
     code = message.text.strip()
     user_id = message.from_user.id
 
-    api_client = APIClient(base_url)
     response = await api_client.redeem_promo_code(user_id, code)
 
     await state.clear()
@@ -798,10 +781,9 @@ async def resolve_promo_code_entered(message: Message, state: FSMContext):
         await message.answer(user_msg, parse_mode="HTML", reply_markup=get_menu_keyboard())
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_about(message: Message):
     """Команда /about — информация о боте"""
-    api_client = APIClient(base_url)
     response = await api_client.get_about()
 
     if response.get("success"):
@@ -862,13 +844,12 @@ def build_relationship_progress(stage: str) -> str:
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_menu_button(message: Message, state: FSMContext):
     """Обработка нажатия кнопки 'Меню' — показ личного кабинета"""
     # Сбрасываем FSM, чтобы не конфликтовать с другими состояниями
     await state.clear()
     user_id = message.from_user.id
-    api_client = APIClient(base_url)
     response = await api_client.get_user_stats(user_id)
 
     if not response or not response.get("success"):
@@ -911,12 +892,11 @@ async def resolve_menu_button(message: Message, state: FSMContext):
     await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_menu_relationship(callback: CallbackQuery):
     """Показать прогресс отношений"""
     await callback.answer()
     user_id = callback.from_user.id
-    api_client = APIClient(base_url)
     response = await api_client.get_user_stats(user_id)
 
     if not response or not response.get("success"):
@@ -934,14 +914,14 @@ async def resolve_menu_relationship(callback: CallbackQuery):
     )
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_menu_promo(callback: CallbackQuery, state: FSMContext):
     """Переход к вводу промокода из меню"""
     await callback.answer()
     await resolve_promo_command(callback.message, state)
 
 
-@handle_errors_async
+@handle_resolver_errors
 async def resolve_menu_buy(callback: CallbackQuery, state: FSMContext):
     """Переход к покупке подписки из меню"""
     await callback.answer()
