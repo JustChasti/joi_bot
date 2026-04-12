@@ -3,7 +3,7 @@ from typing import Callable
 from loguru import logger
 from aiogram.types import Message, CallbackQuery, PreCheckoutQuery
 import aiohttp
-from config.config import service_unavailable_text
+from config import texts
 
 
 # 1. Декоратор для обычной функции
@@ -46,11 +46,11 @@ def handle_resolver_errors(func: Callable) -> Callable:
             logger.exception(f"Ошибка в {func.__name__}: {e}")
             event = args[0] if args else None
             if isinstance(event, Message):
-                await event.answer(service_unavailable_text)
+                await event.answer(texts.SERVICE_UNAVAILABLE)
             elif isinstance(event, CallbackQuery):
-                await event.message.answer(service_unavailable_text)
+                await event.message.answer(texts.SERVICE_UNAVAILABLE)
             elif isinstance(event, PreCheckoutQuery):
-                await event.answer(ok=False, error_message=service_unavailable_text)
+                await event.answer(ok=False, error_message=texts.SERVICE_UNAVAILABLE)
     return wrapper
 
 
