@@ -308,7 +308,8 @@ async def resolve_send_message_request(callback: CallbackQuery, state: FSMContex
     await state.set_state(StateMachine.admin_waiting_send_message)
     await callback.message.answer(
         texts.ADMIN_SEND_MESSAGE_WAIT,
-        reply_markup=get_back_to_admin_menu_keyboard()
+        reply_markup=get_back_to_admin_menu_keyboard(),
+        parse_mode="HTML"
     )
 
 
@@ -351,7 +352,8 @@ async def resolve_broadcast_request(callback: CallbackQuery, state: FSMContext):
     await state.set_state(StateMachine.admin_waiting_broadcast)
     await callback.message.answer(
         texts.ADMIN_BROADCAST_WAIT,
-        reply_markup=get_back_to_admin_menu_keyboard()
+        reply_markup=get_back_to_admin_menu_keyboard(),
+        parse_mode="HTML"
     )
 
 
