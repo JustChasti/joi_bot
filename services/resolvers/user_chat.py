@@ -86,6 +86,8 @@ async def resolve_unsupported_content(message: Message):
         parse_mode="HTML",
         reply_markup=get_menu_keyboard()
     )
+
+
 @handle_resolver_errors
 async def resolve_about(message: Message):
     """Команда /about — информация о боте"""
