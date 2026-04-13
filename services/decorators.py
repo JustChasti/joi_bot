@@ -1,6 +1,9 @@
 import functools
 from typing import Callable
 from loguru import logger
+from aiogram.types import Message, CallbackQuery, PreCheckoutQuery
+import aiohttp
+from config import texts
 
 
 # 1. Декоратор для обычной функции
@@ -33,31 +36,31 @@ def handle_errors_method(func: Callable) -> Callable:
     return wrapper
 
 
-# 3. Декоратор для асинхронной функции
-def handle_errors_async(func: Callable) -> Callable:
-    """
-    Декоратор для обработки ошибок в асинхронных функциях
-    """
+def handle_resolver_errors(func: Callable) -> Callable:
+    """Декоратор для resolver'ов — ловит непредвиденные ошибки и уведомляет пользователя"""
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            logger.error(e)
-            return {"success": False, "error": str(e)}
+            logger.exception(f"Ошибка в {func.__name__}: {e}")
+            event = args[0] if args else None
+            if isinstance(event, Message):
+                await event.answer(texts.SERVICE_UNAVAILABLE)
+            elif isinstance(event, CallbackQuery):
+                await event.message.answer(texts.SERVICE_UNAVAILABLE)
+            elif isinstance(event, PreCheckoutQuery):
+                await event.answer(ok=False, error_message=texts.SERVICE_UNAVAILABLE)
     return wrapper
 
 
-# 4. Декоратор для асинхронного метода класса
-def handle_errors_async_method(func: Callable) -> Callable:
-    """
-    Декоратор для обработки ошибок в асинхронных методах класса
-    """
+def handle_api_errors(func: Callable) -> Callable:
+    """Декоратор для методов APIClient — ловит ошибки aiohttp"""
     @functools.wraps(func)
-    async def wrapper(self, *args, **kwargs):
+    async def wrapper(*args, **kwargs):
         try:
-            return await func(self, *args, **kwargs)
-        except Exception as e:
-            logger.error(e)
-            return {"success": False, "error": str(e)}
+            return await func(*args, **kwargs)
+        except aiohttp.ClientError as e:
+            logger.error(f"API error in {func.__name__}: {e}")
+            return {"success": False, "error": "Connection error"}
     return wrapper

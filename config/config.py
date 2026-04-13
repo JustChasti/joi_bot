@@ -9,6 +9,11 @@ token=os.getenv("BOT_TOKEN", "")
 host=os.getenv("SERVER_HOST", "http://127.0.0.1:8080")
 api_path=os.getenv("API_PATH", "/api/v1")
 debug_mode=os.getenv("DEBUG_MODE", "false").lower() in ("true", "1", "yes")
-base_url = f"{host}{api_path}"
 
-text_hello = "config/texts/hello.txt"
+BASE_URL = f"{host}{api_path}"
+
+PLAN_LABELS = {
+    "month":   "1 месяц",
+    "3months": "3 месяца",
+    "year":    "1 год",
+}

@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher
 
 from config import config
 from services.handlers import setup_router
+from services.api_requests import api_client
 
 
 async def main():
@@ -18,6 +19,7 @@ async def main():
         logger.info("Бот запущен!")
         await dp.start_polling(bot)
     finally:
+        api_client.close()
         await bot.session.close()
         logger.info("Бот остановлен")
 

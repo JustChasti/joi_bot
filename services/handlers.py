@@ -4,19 +4,31 @@ from aiogram.types import Message, CallbackQuery, PreCheckoutQuery
 from aiogram.fsm.context import FSMContext
 
 from services.states import StateMachine
-from services.resolver import (
-    resolve_hello,
-    resolve_model_message,
+from services.resolvers.admin import (
     resolve_admin_menu,
+    resolve_admin_back,
+    resolve_admin_exit,
     resolve_user_info_request,
     resolve_user_info_process,
     resolve_options_request,
     resolve_options_user_id,
     resolve_options_data,
     resolve_all_users,
-    resolve_admin_back,
-    resolve_admin_exit,
-    resolve_unsupported_content,
+    resolve_delete_user_request,
+    resolve_delete_user_process,
+    resolve_create_promo_process,
+    resolve_send_message_request,
+    resolve_send_message_process,
+    resolve_broadcast_request,
+    resolve_broadcast_process,
+    resolve_create_promo_request
+)
+from services.resolvers.promocode import (
+    resolve_promo_command,
+    resolve_promo_code_entered,
+    resolve_menu_promo
+)
+from services.resolvers.subscription import (
     resolve_buy_command,
     resolve_subscription_cancel,
     resolve_subscription_plan_selected,
@@ -24,21 +36,15 @@ from services.resolver import (
     resolve_pay_stars,
     resolve_pre_checkout,
     resolve_successful_payment,
-    resolve_delete_user_request,
-    resolve_delete_user_process,
-    resolve_create_promo_request,
-    resolve_create_promo_process,
-    resolve_promo_command,
-    resolve_promo_code_entered,
+    resolve_menu_buy
+)
+from services.resolvers.user_chat import (
+    resolve_hello,
+    resolve_model_message,
+    resolve_unsupported_content,
     resolve_about,
-    resolve_send_message_request,
-    resolve_send_message_process,
-    resolve_broadcast_request,
-    resolve_broadcast_process,
     resolve_menu_button,
     resolve_menu_relationship,
-    resolve_menu_promo,
-    resolve_menu_buy,
 )
 
 router = Router()
